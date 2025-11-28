@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <title>跳转中...</title>
+</head>
+<body>
+  <p>正在跳转，请稍候...</p>
+
+  <script>
+    async function main() {
+      try {
+        // 访问同仓库下的 config.json，?_t= 时间戳 是为了防止浏览器缓存老版本
+        const resp = await fetch("./config.json?_t=" + Date.now());
+        if (!resp.ok) throw new Error("读取 config.json 失败");
+
+        const data = await resp.json();
+        if (data.url) {
+          // replace 不会把当前页面留下历史记录，用户点回退不会回到 a.html
+          window.location.replace(data.url);
+        } else {
+          document.body.innerHTML = "<p>未配置跳转地址</p>";
+        }
+      } catch (e) {
+        console.error(e);
+        document.body.innerHTML = "<p>跳转失败，请稍后再试</p>";
+      }
+    }
+
+    main();
+  </script>
+</body>
+</html>
