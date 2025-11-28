@@ -17,7 +17,7 @@
         const config = await resp.json();
 
         const target = config.url;
-        const fallback = config.fallbackUrl || "https://cloud.siliconflow.cn/i/paSLL4Ow";
+        const fallback = config.fallbackUrl || "https://cloud.siliconflow.cn/i/6h8mQtSU";
         const maxCount = config.maxCount || 0;
         const current = config.currentCount || 0;
 
@@ -44,7 +44,7 @@
       } catch (err) {
         console.error(err);
         document.body.innerHTML = "加载失败，跳转兜底...";
-        window.location.replace("https://cloud.siliconflow.cn/i/paSLL4Ow");
+        window.location.replace("https://cloud.siliconflow.cn/i/6h8mQtSU");
       }
     }
 
