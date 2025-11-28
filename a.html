@@ -5,25 +5,46 @@
   <title>跳转中...</title>
 </head>
 <body>
-  <p>正在跳转，请稍候...</p>
+  <p>加载中...</p>
 
   <script>
+    const CONFIG_URL = "./config.json?_t=" + Date.now();
+    const COUNT_API = "https://urljump-three.vercel.app/api/add-count";
+
     async function main() {
       try {
-        // 访问同仓库下的 config.json，?_t= 时间戳 是为了防止浏览器缓存老版本
-        const resp = await fetch("./config.json?_t=" + Date.now());
-        if (!resp.ok) throw new Error("读取 config.json 失败");
+        const resp = await fetch(CONFIG_URL);
+        const config = await resp.json();
 
-        const data = await resp.json();
-        if (data.url) {
-          // replace 不会把当前页面留下历史记录，用户点回退不会回到 a.html
-          window.location.replace(data.url);
-        } else {
-          document.body.innerHTML = "<p>未配置跳转地址</p>";
+        const target = config.url;
+        const fallback = config.fallbackUrl || "https://cloud.siliconflow.cn/i/paSLL4Ow";
+        const maxCount = config.maxCount || 0;
+        const current = config.currentCount || 0;
+
+        // 如果超过最大访问量 → 跳转兜底
+        if (maxCount > 0 && current >= maxCount) {
+          window.location.replace(fallback);
+          return;
         }
-      } catch (e) {
-        console.error(e);
-        document.body.innerHTML = "<p>跳转失败，请稍后再试</p>";
+
+        // 访问量 +1
+        try {
+          await fetch(COUNT_API, { method: "POST" });
+        } catch (err) {
+          console.warn("计数失败，不影响跳转");
+        }
+
+        // 跳主URL
+        if (target) {
+          window.location.replace(target);
+        } else {
+          window.location.replace(fallback);
+        }
+
+      } catch (err) {
+        console.error(err);
+        document.body.innerHTML = "加载失败，跳转兜底...";
+        window.location.replace("https://cloud.siliconflow.cn/i/paSLL4Ow");
       }
     }
 
