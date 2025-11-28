@@ -2,64 +2,91 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8" />
-  <title>跳转管理后台2005</title>
+  <title>跳转管理后台2016</title>
 </head>
 <body>
   <h1>跳转管理后台</h1>
 
-  <div>
-    <label>
-      管理员 Token：
-      <input id="token" type="password" style="width:300px;">
-    </label>
-    <span style="font-size:12px;color:#666;">（会保存在本机浏览器，不用每次再输）</span>
+  <!-- 登录区域 -->
+  <div id="loginSection">
+    <div>
+      <label>
+        管理员 Token：
+        <input id="token" type="password" style="width:300px;">
+      </label>
+      <button id="loginBtn">登录</button>
+    </div>
+    <p id="loginStatus" style="margin-top:8px;color:#555;"></p>
   </div>
 
-  <div style="margin-top:10px;">
-    <label>
-      目标 URL：
-      <input id="url" type="text" style="width:450px;" placeholder="例如：https://example.com">
-    </label>
+  <!-- 配置区域（默认隐藏） -->
+  <div id="configSection" style="display:none; margin-top:20px;">
+    <div style="margin-top:10px;">
+      <label>
+        目标 URL：
+        <input id="url" type="text" style="width:450px;" placeholder="例如：https://example.com">
+      </label>
+    </div>
+
+    <div style="margin-top:10px;">
+      <label>
+        兜底 URL：
+        <input id="fallback" type="text" style="width:450px;" placeholder="例如：https://baidu.com">
+      </label>
+    </div>
+
+    <div style="margin-top:10px;">
+      <label>
+        最大访问量（总配额，0 = 不限）：
+        <input id="maxCount" type="number" style="width:120px;">
+      </label>
+    </div>
+
+    <div style="margin-top:10px; font-size:14px; color:#333;">
+      <div id="info">正在加载当前统计...</div>
+    </div>
+
+    <button id="save" style="margin-top:10px;">保存配置</button>
+
+    <p id="status" style="margin-top:10px;color:#555;"></p>
   </div>
-
-  <div style="margin-top:10px;">
-    <label>
-      兜底 URL：
-      <input id="fallback" type="text" style="width:450px;" placeholder="例如：https://baidu.com">
-    </label>
-  </div>
-
-  <div style="margin-top:10px;">
-    <label>
-      最大访问量（总配额，0 = 不限）：
-      <input id="maxCount" type="number" style="width:120px;">
-    </label>
-  </div>
-
-  <div style="margin-top:10px; font-size:14px; color:#333;">
-    <div id="info">正在加载当前统计...</div>
-  </div>
-
-  <button id="save" style="margin-top:10px;">保存配置</button>
-
-  <p id="status" style="margin-top:10px;color:#555;"></p>
 
   <script>
-    // 你的 Vercel 项目地址（注意不带 /api）
     const API_BASE = "https://urljump-three.vercel.app";
 
     const tokenInput = document.getElementById("token");
+    const loginBtn = document.getElementById("loginBtn");
+    const loginStatusEl = document.getElementById("loginStatus");
+
+    const configSection = document.getElementById("configSection");
     const urlInput = document.getElementById("url");
     const fallbackInput = document.getElementById("fallback");
     const maxCountInput = document.getElementById("maxCount");
-    const statusEl = document.getElementById("status");
     const infoEl = document.getElementById("info");
+    const statusEl = document.getElementById("status");
     const saveBtn = document.getElementById("save");
 
-    // ① 启动时，先从 localStorage 里恢复管理员 Token
-    tokenInput.value = localStorage.getItem("adminToken") || "";
+    // 启动时，从 localStorage 恢复 token
+    const storedToken = localStorage.getItem("adminToken") || "";
+    tokenInput.value = storedToken;
 
-    // ② 加载当前 config.json 并显示：url / fallback / maxCount / 剩余次数
+    async function checkToken(token) {
+      try {
+        const resp = await fetch(`${API_BASE}/api/check-token`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: "{}"
+        });
+        return resp.ok;
+      } catch (e) {
+        console.error(e);
+        return false;
+      }
+    }
+
     async function loadConfig() {
       try {
         const resp = await fetch("./config.json?_t=" + Date.now());
@@ -68,8 +95,8 @@
 
         const url = cfg.url || "";
         const fallbackUrl = cfg.fallbackUrl || "";
-        const maxCount = Number(cfg.maxCount || 0);      // 总配额
-        const currentCount = Number(cfg.currentCount || 0); // 当前已用
+        const maxCount = Number(cfg.maxCount || 0);
+        const currentCount = Number(cfg.currentCount || 0);
 
         urlInput.value = url;
         fallbackInput.value = fallbackUrl;
@@ -95,7 +122,30 @@
       }
     }
 
-    // ③ 保存配置：url / fallbackUrl / maxCount
+    async function handleLogin() {
+      const token = tokenInput.value.trim();
+      if (!token) {
+        alert("请输入管理员 Token");
+        return;
+      }
+
+      loginStatusEl.textContent = "正在校验 Token...";
+      const ok = await checkToken(token);
+      if (!ok) {
+        loginStatusEl.textContent = "Token 错误或后端异常，请重试。";
+        configSection.style.display = "none";
+        return;
+      }
+
+      // 登录成功，缓存 token
+      localStorage.setItem("adminToken", token);
+      loginStatusEl.textContent = "登录成功。";
+      configSection.style.display = "block";
+
+      // 拉取配置
+      loadConfig();
+    }
+
     async function saveConfig() {
       const token = tokenInput.value.trim();
       const url = urlInput.value.trim();
@@ -103,16 +153,13 @@
       const maxCount = Number(maxCountInput.value);
 
       if (!token) {
-        alert("请输入管理员 Token");
+        alert("请先输入 Token 并登录");
         return;
       }
       if (!url) {
         alert("请填写目标 URL");
         return;
       }
-
-      // 缓存 Token，避免每次再输
-      localStorage.setItem("adminToken", token);
 
       statusEl.textContent = "保存中...";
 
@@ -136,7 +183,7 @@
           statusEl.textContent = "保存失败：" + (data.message || resp.status);
         } else {
           statusEl.textContent = "保存成功。";
-          // 保存成功后，重新拉一遍 config，更新“剩余次数”的显示
+          // 重新加载配置，刷新“剩余次数”
           loadConfig();
         }
       } catch (e) {
@@ -145,10 +192,13 @@
       }
     }
 
+    loginBtn.addEventListener("click", handleLogin);
     saveBtn.addEventListener("click", saveConfig);
 
-    // 页面加载时马上拉一次配置
-    loadConfig();
+    // 如果本地已经有 token，自动尝试登录一次（体验更好）
+    if (storedToken) {
+      handleLogin();
+    }
   </script>
 </body>
 </html>
