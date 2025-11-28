@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8" />
-  <title>跳转管理后台1941</title>
+  <title>跳转管理后台2005</title>
 </head>
 <body>
   <h1>跳转管理后台</h1>
@@ -12,34 +12,40 @@
       管理员 Token：
       <input id="token" type="password" style="width:300px;">
     </label>
+    <span style="font-size:12px;color:#666;">（会保存在本机浏览器，不用每次再输）</span>
   </div>
 
   <div style="margin-top:10px;">
     <label>
       目标 URL：
-      <input id="url" type="text" style="width:450px;">
+      <input id="url" type="text" style="width:450px;" placeholder="例如：https://example.com">
     </label>
   </div>
 
   <div style="margin-top:10px;">
     <label>
       兜底 URL：
-      <input id="fallback" type="text" style="width:450px;">
+      <input id="fallback" type="text" style="width:450px;" placeholder="例如：https://baidu.com">
     </label>
   </div>
 
   <div style="margin-top:10px;">
     <label>
-      最大访问量（0=无限）：
+      最大访问量（总配额，0 = 不限）：
       <input id="maxCount" type="number" style="width:120px;">
     </label>
   </div>
 
+  <div style="margin-top:10px; font-size:14px; color:#333;">
+    <div id="info">正在加载当前统计...</div>
+  </div>
+
   <button id="save" style="margin-top:10px;">保存配置</button>
 
-  <p id="status"></p>
+  <p id="status" style="margin-top:10px;color:#555;"></p>
 
   <script>
+    // 你的 Vercel 项目地址（注意不带 /api）
     const API_BASE = "https://urljump-three.vercel.app";
 
     const tokenInput = document.getElementById("token");
@@ -47,48 +53,101 @@
     const fallbackInput = document.getElementById("fallback");
     const maxCountInput = document.getElementById("maxCount");
     const statusEl = document.getElementById("status");
+    const infoEl = document.getElementById("info");
+    const saveBtn = document.getElementById("save");
 
-    // ① 自动从 localStorage 读取 token
+    // ① 启动时，先从 localStorage 里恢复管理员 Token
     tokenInput.value = localStorage.getItem("adminToken") || "";
 
+    // ② 加载当前 config.json 并显示：url / fallback / maxCount / 剩余次数
     async function loadConfig() {
-      const resp = await fetch("./config.json?_t=" + Date.now());
-      const cfg = await resp.json();
-      urlInput.value = cfg.url || "";
-      fallbackInput.value = cfg.fallbackUrl || "";
-      maxCountInput.value = cfg.maxCount || 0;
+      try {
+        const resp = await fetch("./config.json?_t=" + Date.now());
+        if (!resp.ok) throw new Error("读取 config.json 失败");
+        const cfg = await resp.json();
+
+        const url = cfg.url || "";
+        const fallbackUrl = cfg.fallbackUrl || "";
+        const maxCount = Number(cfg.maxCount || 0);      // 总配额
+        const currentCount = Number(cfg.currentCount || 0); // 当前已用
+
+        urlInput.value = url;
+        fallbackInput.value = fallbackUrl;
+        maxCountInput.value = maxCount;
+
+        let remainingText;
+        if (maxCount <= 0) {
+          remainingText = "无限制";
+        } else {
+          const remaining = Math.max(maxCount - currentCount, 0);
+          remainingText = remaining + " 次";
+        }
+
+        infoEl.textContent =
+          "当前总访问次数（currentCount）： " + currentCount +
+          " 次；剩余可用次数： " + remainingText;
+
+        statusEl.textContent = "已读取当前配置。";
+      } catch (e) {
+        console.error(e);
+        infoEl.textContent = "读取配置失败，可能是 config.json 不存在或网络异常。";
+        statusEl.textContent = "读取当前配置失败。";
+      }
     }
 
+    // ③ 保存配置：url / fallbackUrl / maxCount
     async function saveConfig() {
       const token = tokenInput.value.trim();
       const url = urlInput.value.trim();
       const fallback = fallbackInput.value.trim();
       const maxCount = Number(maxCountInput.value);
 
-      if (!token) return alert("请输入 Token");
+      if (!token) {
+        alert("请输入管理员 Token");
+        return;
+      }
+      if (!url) {
+        alert("请填写目标 URL");
+        return;
+      }
 
-      // ② 把 token 缓存到 localStorage
+      // 缓存 Token，避免每次再输
       localStorage.setItem("adminToken", token);
 
-      const resp = await fetch(`${API_BASE}/api/update-config`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          url,
-          fallbackUrl: fallback,
-          maxCount
-        })
-      });
+      statusEl.textContent = "保存中...";
 
-      const data = await resp.json();
-      statusEl.innerText = JSON.stringify(data);
+      try {
+        const resp = await fetch(`${API_BASE}/api/update-config`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            url,
+            fallbackUrl: fallback,
+            maxCount
+          })
+        });
+
+        const data = await resp.json().catch(() => ({}));
+
+        if (!resp.ok) {
+          statusEl.textContent = "保存失败：" + (data.message || resp.status);
+        } else {
+          statusEl.textContent = "保存成功。";
+          // 保存成功后，重新拉一遍 config，更新“剩余次数”的显示
+          loadConfig();
+        }
+      } catch (e) {
+        console.error(e);
+        statusEl.textContent = "保存失败：网络错误或后端异常。";
+      }
     }
 
-    document.getElementById("save").onclick = saveConfig;
+    saveBtn.addEventListener("click", saveConfig);
 
+    // 页面加载时马上拉一次配置
     loadConfig();
   </script>
 </body>
