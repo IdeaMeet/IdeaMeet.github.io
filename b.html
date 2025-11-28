@@ -2,97 +2,94 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8" />
-  <title>管理跳转地址1910</title>
+  <title>跳转管理后台1941</title>
 </head>
 <body>
-  <h1>配置 a.html 的跳转地址</h1>
-
-  <p>当前跳转 URL 会从 config.json 读取，保存时会通过 Vercel 接口更新 config.json。</p>
+  <h1>跳转管理后台</h1>
 
   <div>
     <label>
-      管理员 Token（你自己记住的一个密码）：
-      <input id="token" type="password" placeholder="和 Vercel 环境变量 ADMIN_TOKEN 一致" style="width: 320px;">
+      管理员 Token：
+      <input id="token" type="password" style="width:300px;">
     </label>
   </div>
 
-  <div style="margin-top: 10px;">
+  <div style="margin-top:10px;">
     <label>
       目标 URL：
-      <input id="urlInput" type="text" style="width: 400px;" placeholder="例如：https://console.bce.baidu.com/" />
+      <input id="url" type="text" style="width:450px;">
     </label>
   </div>
 
-  <button id="saveBtn" style="margin-top: 10px;">保存</button>
+  <div style="margin-top:10px;">
+    <label>
+      兜底 URL：
+      <input id="fallback" type="text" style="width:450px;">
+    </label>
+  </div>
 
-  <p id="status" style="margin-top: 10px; color: #333;"></p>
+  <div style="margin-top:10px;">
+    <label>
+      最大访问量（0=无限）：
+      <input id="maxCount" type="number" style="width:120px;">
+    </label>
+  </div>
+
+  <button id="save" style="margin-top:10px;">保存配置</button>
+
+  <p id="status"></p>
 
   <script>
-    // 你的 Vercel 项目域名（后端），部署后替换成真实地址，例如：
-    // const API_BASE = "https://redirect-admin-backend.vercel.app";
     const API_BASE = "https://urljump-three.vercel.app";
 
     const tokenInput = document.getElementById("token");
-    const urlInput = document.getElementById("urlInput");
+    const urlInput = document.getElementById("url");
+    const fallbackInput = document.getElementById("fallback");
+    const maxCountInput = document.getElementById("maxCount");
     const statusEl = document.getElementById("status");
-    const saveBtn = document.getElementById("saveBtn");
 
-    // 1. 页面加载时，先从 config.json 里读出当前 URL
-    async function loadCurrent() {
-      try {
-        const resp = await fetch("./config.json?_t=" + Date.now());
-        if (!resp.ok) throw new Error("读取失败");
-        const data = await resp.json();
-        if (data.url) {
-          urlInput.value = data.url;
-        }
-        statusEl.textContent = "已读取当前配置。";
-      } catch (e) {
-        console.error(e);
-        statusEl.textContent = "读取当前配置失败，请检查网络或稍后再试。";
-      }
+    // ① 自动从 localStorage 读取 token
+    tokenInput.value = localStorage.getItem("adminToken") || "";
+
+    async function loadConfig() {
+      const resp = await fetch("./config.json?_t=" + Date.now());
+      const cfg = await resp.json();
+      urlInput.value = cfg.url || "";
+      fallbackInput.value = cfg.fallbackUrl || "";
+      maxCountInput.value = cfg.maxCount || 0;
     }
 
-    // 2. 点击“保存”按钮时，调用 Vercel 后端更新 config.json
-    saveBtn.addEventListener("click", async () => {
+    async function saveConfig() {
       const token = tokenInput.value.trim();
-      const newUrl = urlInput.value.trim();
+      const url = urlInput.value.trim();
+      const fallback = fallbackInput.value.trim();
+      const maxCount = Number(maxCountInput.value);
 
-      if (!token) {
-        alert("请先输入管理员 Token");
-        return;
-      }
-      if (!newUrl) {
-        alert("请填写目标 URL");
-        return;
-      }
+      if (!token) return alert("请输入 Token");
 
-      statusEl.textContent = "保存中...";
+      // ② 把 token 缓存到 localStorage
+      localStorage.setItem("adminToken", token);
 
-      try {
-        const resp = await fetch(`${API_BASE}/api/update-config`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-          },
-          body: JSON.stringify({ url: newUrl })
-        });
+      const resp = await fetch(`${API_BASE}/api/update-config`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          url,
+          fallbackUrl: fallback,
+          maxCount
+        })
+      });
 
-        const data = await resp.json().catch(() => ({}));
+      const data = await resp.json();
+      statusEl.innerText = JSON.stringify(data);
+    }
 
-        if (!resp.ok) {
-          statusEl.textContent = "保存失败：" + (data.message || resp.status);
-        } else {
-          statusEl.textContent = "保存成功，新的跳转地址为：" + newUrl + "。可能有几秒钟缓存延迟。";
-        }
-      } catch (e) {
-        console.error(e);
-        statusEl.textContent = "保存失败：网络错误或后端异常。";
-      }
-    });
+    document.getElementById("save").onclick = saveConfig;
 
-    loadCurrent();
+    loadConfig();
   </script>
 </body>
 </html>
