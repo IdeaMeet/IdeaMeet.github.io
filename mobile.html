@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <title>跳转管理后台</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <style>
+    :root {
+      font-size: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      color: #222;
+      background-color: #f5f5f7;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #f5f5f7;
+    }
+    .app {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 12px 12px 24px;
+      box-sizing: border-box;
+    }
+    h1 {
+      font-size: 1.25rem;
+      margin: 12px 0;
+      text-align: left;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 12px 14px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.04);
+      margin-top: 10px;
+    }
+    .label {
+      font-size: 0.9rem;
+      margin-bottom: 4px;
+      display: block;
+      color: #555;
+    }
+    .input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      font-size: 0.95rem;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      outline: none;
+      -webkit-appearance: none;
+    }
+    .input:focus {
+      border-color: #0070f3;
+      box-shadow: 0 0 0 2px rgba(0,112,243,0.15);
+    }
+    .btn {
+      width: 100%;
+      padding: 10px 0;
+      border-radius: 999px;
+      border: none;
+      font-size: 0.95rem;
+      font-weight: 500;
+      margin-top: 10px;
+      background: #0070f3;
+      color: #fff;
+    }
+    .btn:active {
+      opacity: 0.8;
+    }
+    .btn-secondary {
+      background: #e5e7eb;
+      color: #111827;
+    }
+    .small-text {
+      font-size: 0.8rem;
+      color: #666;
+    }
+    #loginStatus, #status, #info {
+      font-size: 0.8rem;
+      margin-top: 6px;
+      color: #555;
+      line-height: 1.4;
+    }
+    /* 顶部 Vercel 状态栏 */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      margin-bottom: 8px;
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .status-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #9ca3af;
+    }
+    .status-text {
+      font-size: 0.8rem;
+      color: #374151;
+    }
+    .status-note {
+      font-size: 0.7rem;
+      color: #9ca3af;
+    }
+    .status-dot.ok {
+      background: #10b981; /* 绿色 */
+    }
+    .status-dot.bad {
+      background: #ef4444; /* 红色 */
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- 顶部 Vercel 访问状态 -->
+    <div class="status-bar">
+      <div class="status-left">
+        <div id="vercelDot" class="status-dot"></div>
+        <div>
+          <div id="vercelStatus" class="status-text">检测 Vercel 连接中...</div>
+          <div class="status-note">部分地区可能无法连接 vercel.app</div>
+        </div>
+      </div>
+    </div>
+
+    <h1>跳转管理后台</h1>
+
+    <!-- 登录卡片 -->
+    <div class="card" id="loginSection">
+      <label class="label" for="token">管理员 Token</label>
+      <input id="token" type="password" class="input" placeholder="请输入管理员 Token">
+      <button id="loginBtn" class="btn">登录</button>
+      <p id="loginStatus"></p>
+      <p class="small-text">提示：Token 会保存在本机浏览器，下次自动尝试登录。</p>
+    </div>
+
+    <!-- 配置卡片（默认隐藏） -->
+    <div class="card" id="configSection" style="display:none;">
+      <label class="label" for="url">目标 URL</label>
+      <input id="url" type="text" class="input" placeholder="例如：https://example.com">
+
+      <label class="label" for="fallback" style="margin-top:10px;">兜底 URL</label>
+      <input id="fallback" type="text" class="input" placeholder="例如：https://baidu.com">
+
+      <label class="label" for="maxCount" style="margin-top:10px;">最大访问量（总配额，0 = 不限）</label>
+      <input id="maxCount" type="number" class="input" placeholder="例如：100000">
+
+      <p id="info"></p>
+
+      <button id="save" class="btn">保存配置</button>
+      <p id="status"></p>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = "https://urljump-three.vercel.app";
+
+    const tokenInput = document.getElementById("token");
+    const loginBtn = document.getElementById("loginBtn");
+    const loginStatusEl = document.getElementById("loginStatus");
+
+    const configSection = document.getElementById("configSection");
+    const urlInput = document.getElementById("url");
+    const fallbackInput = document.getElementById("fallback");
+    const maxCountInput = document.getElementById("maxCount");
+    const infoEl = document.getElementById("info");
+    const statusEl = document.getElementById("status");
+    const saveBtn = document.getElementById("save");
+
+    const vercelDot = document.getElementById("vercelDot");
+    const vercelStatus = document.getElementById("vercelStatus");
+
+    // 从 localStorage 恢复 token
+    const storedToken = localStorage.getItem("adminToken") || "";
+    tokenInput.value = storedToken;
+
+    // 检测 Vercel 是否可访问（不要求 200，只要有响应就认为“能连上”）
+    async function checkVercelReachable() {
+      try {
+        const resp = await fetch(`${API_BASE}/api/check-token`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: "{}"
+        });
+        // 能拿到响应（无网络错误）就算“可访问”，状态码 401/405 都没关系
+        vercelDot.classList.remove("bad");
+        vercelDot.classList.add("ok");
+        vercelStatus.textContent = "Vercel 可访问（当前网络可连）";
+      } catch (e) {
+        console.error("check vercel error", e);
+        vercelDot.classList.remove("ok");
+        vercelDot.classList.add("bad");
+        vercelStatus.textContent = "Vercel 无法连接（当前网络可能受限）";
+      }
+    }
+
+    async function checkToken(token) {
+      try {
+        const resp = await fetch(`${API_BASE}/api/check-token`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: "{}"
+        });
+        return resp.ok;
+      } catch (e) {
+        console.error(e);
+        return false;
+      }
+    }
+
+    async function loadConfig() {
+      try {
+        const resp = await fetch("./config.json?_t=" + Date.now());
+        if (!resp.ok) throw new Error("读取 config.json 失败");
+        const cfg = await resp.json();
+
+        const url = cfg.url || "";
+        const fallbackUrl = cfg.fallbackUrl || "";
+        const maxCount = Number(cfg.maxCount || 0);
+        const currentCount = Number(cfg.currentCount || 0);
+
+        urlInput.value = url;
+        fallbackInput.value = fallbackUrl;
+        maxCountInput.value = maxCount;
+
+        let remainingText;
+        if (maxCount <= 0) {
+          remainingText = "无限制";
+        } else {
+          const remaining = Math.max(maxCount - currentCount, 0);
+          remainingText = remaining + " 次";
+        }
+
+        infoEl.textContent =
+          "当前总访问次数（currentCount）： " + currentCount +
+          " 次；剩余可用次数： " + remainingText;
+
+        statusEl.textContent = "已读取当前配置。";
+      } catch (e) {
+        console.error(e);
+        infoEl.textContent = "读取配置失败，可能是 config.json 不存在或网络异常。";
+        statusEl.textContent = "读取当前配置失败。";
+      }
+    }
+
+    async function handleLogin() {
+      const token = tokenInput.value.trim();
+      if (!token) {
+        alert("请输入管理员 Token");
+        return;
+      }
+
+      loginStatusEl.textContent = "正在校验 Token...";
+      const ok = await checkToken(token);
+      if (!ok) {
+        loginStatusEl.textContent = "Token 错误或后端异常，请重试。";
+        configSection.style.display = "none";
+        return;
+      }
+
+      // 登录成功，缓存 token
+      localStorage.setItem("adminToken", token);
+      loginStatusEl.textContent = "登录成功。";
+      configSection.style.display = "block";
+
+      // 拉取配置
+      loadConfig();
+    }
+
+    async function saveConfig() {
+      const token = tokenInput.value.trim();
+      const url = urlInput.value.trim();
+      const fallback = fallbackInput.value.trim();
+      const maxCount = Number(maxCountInput.value);
+
+      if (!token) {
+        alert("请先输入 Token 并登录");
+        return;
+      }
+      if (!url) {
+        alert("请填写目标 URL");
+        return;
+      }
+
+      statusEl.textContent = "保存中...";
+
+      try {
+        const resp = await fetch(`${API_BASE}/api/update-config`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            url,
+            fallbackUrl: fallback,
+            maxCount
+          })
+        });
+
+        const data = await resp.json().catch(() => ({}));
+
+        if (!resp.ok) {
+          statusEl.textContent = "保存失败：" + (data.message || resp.status);
+        } else {
+          statusEl.textContent = "保存成功。";
+          // 重新加载配置，刷新“剩余次数”
+          loadConfig();
+        }
+      } catch (e) {
+        console.error(e);
+        statusEl.textContent = "保存失败：网络错误或后端异常。";
+      }
+    }
+
+    loginBtn.addEventListener("click", handleLogin);
+    saveBtn.addEventListener("click", saveConfig);
+
+    // 页面加载时：
+    // 1. 检测 Vercel 是否可访问
+    checkVercelReachable();
+    // 2. 如果本地已经有 token，自动尝试登录一次
+    if (storedToken) {
+      handleLogin();
+    }
+  </script>
+</body>
+</html>
