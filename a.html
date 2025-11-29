@@ -3,38 +3,60 @@
 <head>
   <meta charset="UTF-8" />
   <title>跳转中...</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body>
-  <p>加载中...</p>
+<body style="font-size:16px;">
+  <p>正在跳转，请稍候...</p>
 
   <script>
+    // 配置文件从 GitHub Pages 读，确保全球可访问
     const CONFIG_URL = "./config.json?_t=" + Date.now();
+    // 你的 vercel 计数接口（请不要改）
     const COUNT_API = "https://urljump-three.vercel.app/api/add-count";
+
+    // 封装一个带 0.5 秒超时的 fetch（避免被墙时长时间卡住）
+    function fetchWithTimeout(url, options = {}, timeout = 500) {
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          reject(new Error("timeout"));
+        }, timeout);
+
+        fetch(url, options)
+          .then(response => {
+            clearTimeout(timer);
+            resolve(response);
+          })
+          .catch(err => {
+            clearTimeout(timer);
+            reject(err);
+          });
+      });
+    }
 
     async function main() {
       try {
+        // 1. 先从 GitHub Pages 拿 config.json（不会被墙）
         const resp = await fetch(CONFIG_URL);
         const config = await resp.json();
 
         const target = config.url;
-        const fallback = config.fallbackUrl || "https://cloud.siliconflow.cn/i/6h8mQtSU";
-        const maxCount = config.maxCount || 0;
-        const current = config.currentCount || 0;
+        const fallback = config.fallbackUrl || "https://baidu.com";
+        const maxCount = Number(config.maxCount || 0);
+        const current = Number(config.currentCount || 0);
 
-        // 如果超过最大访问量 → 跳转兜底
+        // 2. 判断访问量是否超过上限
         if (maxCount > 0 && current >= maxCount) {
           window.location.replace(fallback);
           return;
         }
 
-        // 访问量 +1
-        try {
-          await fetch(COUNT_API, { method: "POST" });
-        } catch (err) {
-          console.warn("计数失败，不影响跳转");
-        }
+        // 3. 尝试向 Vercel 发计数请求，超时 0.5s 则忽略
+        fetchWithTimeout(COUNT_API, { method: "POST" }, 500)
+          .catch(err => {
+            console.warn("Vercel 不可访问，跳过计数：", err);
+          });
 
-        // 跳主URL
+        // 4. 最后跳转主 URL
         if (target) {
           window.location.replace(target);
         } else {
@@ -42,9 +64,8 @@
         }
 
       } catch (err) {
-        console.error(err);
-        document.body.innerHTML = "加载失败，跳转兜底...";
-        window.location.replace("https://cloud.siliconflow.cn/i/6h8mQtSU");
+        console.error("读取配置失败，跳兜底：", err);
+        window.location.replace("https://baidu.com");
       }
     }
 
